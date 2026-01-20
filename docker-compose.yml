@@ -1,0 +1,59 @@
+version: '3.8'
+
+name: test-oberstaff
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: arbitrage-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - arbitrage-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  python:
+    build:
+      context: ./python
+      dockerfile: Dockerfile
+    container_name: arbitrage-python
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - arbitrage-network
+    environment:
+      - REDIS_HOST=redis
+    restart: unless-stopped
+    volumes:
+      - ./python:/app
+
+  node:
+    build:
+      context: ./node
+      dockerfile: Dockerfile
+    container_name: arbitrage-node
+    depends_on:
+      redis:
+        condition: service_healthy
+      python:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    networks:
+      - arbitrage-network
+    environment:
+      - REDIS_HOST=redis
+      - SIMULATE=false
+    restart: unless-stopped
+    volumes:
+      - ./node:/app
+      - /app/node_modules
+
+networks:
+  arbitrage-network:
+    driver: bridge

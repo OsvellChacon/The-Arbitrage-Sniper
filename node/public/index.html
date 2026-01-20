@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Oberstaff - Arbitrage Sniper</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #1f2937;
+      --border-color: #30363d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --success: #3fb950;
+      --danger: #f85149;
+      --warning: #d29922;
+      --info: #58a6ff;
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 0;
+      margin: 0;
+      min-height: 100vh;
+    }
+    
+    .navbar {
+      background: var(--bg-secondary) !important;
+      border-bottom: 1px solid var(--border-color);
+      padding: 1rem 0;
+      margin-bottom: 2rem;
+    }
+    
+    .navbar-brand {
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--text-primary) !important;
+    }
+    
+    .status-indicator {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    .status-connected { background-color: var(--success); }
+    .status-disconnected { background-color: var(--danger); }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .card-custom {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      height: 100%;
+    }
+    
+    .card-custom:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    .exchange-card {
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .exchange-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--card-accent), transparent);
+    }
+    
+    .binance-card::before { --card-accent: #f0b90b; }
+    .kraken-card::before { --card-accent: #5741d9; }
+    
+    .price-label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.25rem;
+      font-weight: 500;
+    }
+    
+    .price-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    }
+    
+    .price-change {
+      font-size: 0.875rem;
+      margin-left: 0.5rem;
+      font-weight: 600;
+    }
+    
+    .spread-card {
+      background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+      border: 2px solid var(--border-color);
+    }
+    
+    .spread-value {
+      font-size: 3rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      margin: 1rem 0;
+      background: linear-gradient(135deg, var(--success), var(--info));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .spread-profitable { 
+      background: linear-gradient(135deg, var(--success), #50c878);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+    }
+    
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+    }
+    
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    
+    .chart-container {
+      position: relative;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .chart-controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    
+    .btn-chart {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 0.375rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .btn-chart:hover {
+      background: var(--border-color);
+      border-color: var(--text-secondary);
+    }
+    
+    .btn-chart.active {
+      background: var(--info);
+      border-color: var(--info);
+      color: #fff;
+    }
+    
+    .signals-container {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    
+    .signals-container::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .signals-container::-webkit-scrollbar-track {
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+    }
+    
+    .signals-container::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 4px;
+    }
+    
+    .signals-container::-webkit-scrollbar-thumb:hover {
+      background: var(--text-secondary);
+    }
+    
+    .signal-item {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      transition: all 0.2s ease;
+      animation: slideIn 0.3s ease;
+      border-left: 4px solid transparent;
+    }
+    
+    .signal-item.signal-profitable {
+      border-left-color: var(--success);
+      background: rgba(63, 185, 80, 0.05);
+    }
+    
+    .signal-item.signal-loss {
+      border-left-color: var(--danger);
+      background: rgba(248, 81, 73, 0.05);
+    }
+    
+    .signal-item:hover {
+      background: var(--bg-tertiary);
+    }
+    
+    .signal-item:last-child {
+      border-bottom: none;
+    }
+    
+    .signal-profit-badge {
+      padding: 0.75rem 1.25rem;
+      border-radius: 8px;
+      font-weight: 900;
+      font-size: 1.25rem;
+      min-width: 120px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    
+    .profit-positive {
+      background: var(--success);
+      color: white;
+      animation: pulse-green 2s ease-in-out infinite;
+    }
+    
+    .profit-negative {
+      background: var(--danger);
+      color: white;
+    }
+    
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: 0 2px 8px rgba(63, 185, 80, 0.4); }
+      50% { box-shadow: 0 4px 16px rgba(63, 185, 80, 0.8); }
+    }
+    
+    .signal-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    
+    .signal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .signal-route {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text-primary);
+    }
+    
+    .signal-time {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      font-variant-numeric: tabular-nums;
+    }
+    
+    .signal-details {
+      display: flex;
+      gap: 1.5rem;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+    
+    .signal-details span {
+      display: flex;
+      align-items: center;
+    }
+    
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .signal-badge {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.875rem;
+      min-width: 80px;
+      text-align: center;
+    }
+    
+    .signal-time {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      font-variant-numeric: tabular-nums;
+      min-width: 80px;
+    }
+    
+    .signal-message {
+      flex: 1;
+      font-size: 0.938rem;
+    }
+    
+    .btn-execute {
+      background: var(--success);
+      border: 1px solid var(--success);
+      color: white;
+      padding: 0.625rem 1.25rem;
+      border-radius: 8px;
+      font-size: 0.938rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      white-space: nowrap;
+      min-width: 140px;
+      justify-content: center;
+    }
+    
+    .btn-execute:hover:not(:disabled) {
+      background: #2ea043;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(63, 185, 80, 0.5);
+    }
+    
+    .btn-execute:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    
+    .btn-execute.btn-disabled {
+      background: var(--bg-tertiary);
+      border-color: var(--border-color);
+      color: var(--text-secondary);
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(100px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+    
+    @keyframes slideOut {
+      from {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateX(100px);
+      }
+    }
+    
+    .order-item {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border-color);
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 1rem;
+      align-items: center;
+      transition: background 0.2s ease;
+      animation: slideIn 0.3s ease;
+    }
+    
+    .order-item:hover {
+      background: var(--bg-tertiary);
+    }
+    
+    .order-item:last-child {
+      border-bottom: none;
+    }
+    
+    .order-badge {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.75rem;
+      min-width: 90px;
+      text-align: center;
+      background: var(--success);
+      color: white;
+    }
+    
+    .order-details {
+      flex: 1;
+    }
+    
+    .order-route {
+      font-size: 0.875rem;
+      color: var(--text-primary);
+      margin-bottom: 0.25rem;
+    }
+    
+    .order-profit {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    
+    .order-metrics {
+      text-align: right;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    
+    .order-metrics .profit {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--success);
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-secondary);
+    }
+    
+    .empty-state i {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+    
+    #priceChart {
+      width: 100%;
+      height: 400px;
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      cursor: crosshair;
+    }
+    
+    .chart-legend {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 1rem;
+      justify-content: center;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+    }
+    
+    .legend-color {
+      width: 20px;
+      height: 3px;
+      border-radius: 2px;
+    }
+    
+    .legend-binance { background: #f0b90b; }
+    .legend-kraken { background: #5741d9; }
+    
+    .project-title-highlight {
+      color: var(--info);
+      font-weight: 800;
+      background: linear-gradient(90deg, rgba(88,166,255,0.08), transparent);
+      padding: 0.12rem 0.5rem;
+      border-radius: 6px;
+      margin-left: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+    .app-footer {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 0.75rem 0;
+      text-align: center;
+      margin-top: 2rem;
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 0 1rem; }
+      .price-value { font-size: 1.25rem; }
+      .spread-value { font-size: 2rem; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .signal-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-dark">
+    <div class="container">
+      <span class="navbar-brand">
+        <i class="bi bi-graph-up-arrow"></i> Test Oberstaff
+        <small class="project-title-highlight ms-2">Arbitrage Sniper - BTC/USDT</small>
+      </span>
+      <div class="d-flex align-items-center gap-3">
+        <span class="badge bg-secondary">
+          <span class="status-indicator status-disconnected" id="status-indicator"></span>
+          <span id="connection-status">Conectando...</span>
+        </span>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Señales Hoy</div>
+        <div class="stat-value" id="signals-count">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Órdenes Ejecutadas</div>
+        <div class="stat-value text-success" id="orders-count">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ganancia Simulada</div>
+        <div class="stat-value text-warning" id="total-profit">$0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Latencia Promedio</div>
+        <div class="stat-value" id="avg-latency">0.00ms</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Spread Promedio</div>
+        <div class="stat-value" id="avg-spread">0.00%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Spread Máximo</div>
+        <div class="stat-value text-success" id="max-spread">0.00%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Última Actualización</div>
+        <div class="stat-value" style="font-size: 1rem;" id="last-update">--:--:--</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Estado Sistema</div>
+        <div class="stat-value" style="font-size: 1rem;" id="system-status">
+          <span class="badge bg-success">Operativo</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+      <div class="col-lg-6">
+        <div class="card-custom exchange-card binance-card p-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0 text-warning"><i class="bi bi-currency-bitcoin"></i> Binance</h4>
+            <span class="badge bg-success" id="binance-status">En vivo</span>
+          </div>
+          <div class="row text-center">
+            <div class="col-6">
+              <div class="price-label">BID (Compra)</div>
+              <div class="price-value text-success">
+                $<span id="bin-bid">---</span>
+                <span class="price-change" id="bin-bid-change"></span>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="price-label">ASK (Venta)</div>
+              <div class="price-value text-danger">
+                $<span id="bin-ask">---</span>
+                <span class="price-change" id="bin-ask-change"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-lg-6">
+        <div class="card-custom exchange-card kraken-card p-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0" style="color: #5741d9;"><i class="bi bi-currency-bitcoin"></i> Kraken</h4>
+            <span class="badge bg-success" id="kraken-status">En vivo</span>
+          </div>
+          <div class="row text-center">
+            <div class="col-6">
+              <div class="price-label">BID (Compra)</div>
+              <div class="price-value text-success">
+                $<span id="kra-bid">---</span>
+                <span class="price-change" id="kra-bid-change"></span>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="price-label">ASK (Venta)</div>
+              <div class="price-value text-danger">
+                $<span id="kra-ask">---</span>
+                <span class="price-change" id="kra-ask-change"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-custom spread-card p-4 text-center mb-4">
+      <h4 class="mb-2">
+        <i class="bi bi-arrows-angle-expand"></i> Spread de Arbitraje
+      </h4>
+      <div class="spread-value" id="spread">0.00%</div>
+      <div class="text-muted" id="spread-description">
+        Esperando datos...
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0"><i class="bi bi-graph-up"></i> Gráfico de Precios</h5>
+        <div class="chart-controls">
+          <button class="btn-chart" data-range="900">15 Min</button>
+          <button class="btn-chart" id="clear-chart"><i class="bi bi-trash"></i></button>
+        </div>
+      </div>
+      <canvas id="priceChart"></canvas>
+      <div class="chart-legend">
+        <div class="legend-item">
+          <div class="legend-color legend-binance"></div>
+          <span>Binance ASK</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color legend-kraken"></div>
+          <span>Kraken BID</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="signals-container mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0"><i class="bi bi-bell"></i> Señales de Arbitraje</h5>
+        <button class="btn-chart" id="clear-signals">
+          <i class="bi bi-trash"></i> Limpiar
+        </button>
+      </div>
+      <div id="signal-list">
+        <div class="empty-state">
+          <i class="bi bi-inbox"></i>
+          <p>No hay señales aún. Esperando oportunidades de arbitraje...</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="signals-container">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0"><i class="bi bi-check-circle"></i> Órdenes Ejecutadas</h5>
+        <button class="btn-chart" id="clear-orders">
+          <i class="bi bi-trash"></i> Limpiar
+        </button>
+      </div>
+      <div id="orders-list">
+        <div class="empty-state">
+          <i class="bi bi-inbox"></i>
+          <p>No hay órdenes ejecutadas. Esperando oportunidades...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="client.js"></script>
+
+  <footer class="app-footer">
+    <div class="container">
+      <small>Hecho por el Ing. Osvell Chacon</small>
+    </div>
+  </footer>
+ </body>
+</html>
