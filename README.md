@@ -76,9 +76,6 @@ Medida con perf_counter (Python) desde recepción ZMQ hasta cálculo de spread:
 <5 ms en ejecución local (promedio ~1-3 ms).
 Ejemplo log: "Latencia interna: 2.45 ms".
 (Externa a exchanges depende de red, pero no afecta el core; simulación para demo).
-Notas Finales
-
-Listo para entrega: Repo + video enviados a hector@oberstaff.com y natacha@oberstaff.com.
 
 ¡Gracias por la oportunidad!
 Osvell – Venezuela, CA
